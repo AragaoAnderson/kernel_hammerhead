@@ -357,7 +357,7 @@ config CPUFREQ_LIMIT_MAX_FREQ
 config CPUFREQ_ID_PERFLOCK
 	bool "Intellidemand Performance Lock"
 	depends on CPU_FREQ_GOV_INTELLIDEMAND
-	default	y
+	default	n
 	help
 		Minimum CPU performance lock for Intellidemand governor
 
