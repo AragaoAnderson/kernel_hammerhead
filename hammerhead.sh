@@ -9,12 +9,12 @@ restore='\033[0m'
 clear
 
 # Piasek Kernel Version
-BASE_SAND_VER="Nexus5Experience"
-VER="-STOCK"
-SAND_VER=$BASE_SAND_VER$VER
+# BASE_SAND_VER="Nexus5Experience"
+# VER="-STOCK"
+# SAND_VER=$BASE_SAND_VER$VER
 
 # Piasek Variables
-export LOCALVERSION="-"`echo $SAND_VER`
+# export LOCALVERSION="-"`echo $SAND_VER`
 export CROSS_COMPILE=/home/anderson/android/gcc/bin/arm-eabi-
 export ARCH=arm
 export SUBARCH=arm
