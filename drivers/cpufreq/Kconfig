@@ -95,17 +95,11 @@ config CPU_FREQ_DEFAULT_GOV_ONDEMAND
 	  governor. If unsure have a look at the help section of the
 	  driver. Fallback governor will be the performance governor.
 
-config CPU_FREQ_DEFAULT_GOV_ONDEMANDPLUS
-	bool "ondemandplus"
-	select CPU_FREQ_GOV_ONDEMANDPLUS
-	select CPU_FREQ_GOV_PERFORMANCE
+config CPU_FREQ_DEFAULT_GOV_SMARTMAX
+	bool "smartmax"
+	select CPU_FREQ_GOV_SMARTMAX
 	help
-	  Use the CPUFreq governor 'ondemandplus' as default. This allows
-	  you to get a full dynamic frequency capable system by simply
-	  loading your cpufreq low-level hardware driver.
-	  Be aware that not all cpufreq drivers support the ondemandplus
-	  governor. If unsure have a look at the help section of the
-	  driver. Fallback governor will be the performance governor.
+	  Use the CPUFreq governor 'smartmax' as default
 
 config CPU_FREQ_DEFAULT_GOV_CONSERVATIVE
 	bool "conservative"
@@ -128,13 +122,6 @@ config CPU_FREQ_DEFAULT_GOV_INTERACTIVE
 	  loading your cpufreq low-level hardware driver, using the
 	  'interactive' governor for latency-sensitive workloads.
 
-config CPU_FREQ_DEFAULT_GOV_INTELLIDEMAND
-	bool "intellidemand"
-	select CPU_FREQ_GOV_INTELLIDEMAND
-	help
-	  Use the CPUFreq governor 'intellidemand' as default. This is
-	  based on Ondemand with browsing detection based on GPU loading
-
 config CPU_FREQ_DEFAULT_GOV_INTELLIACTIVE
 	bool "intelliactive"
 	select CPU_FREQ_GOV_INTELLIACTIVE
@@ -143,7 +130,6 @@ config CPU_FREQ_DEFAULT_GOV_INTELLIACTIVE
 	  you to get a full dynamic cpu frequency capable system by simply
 	  loading your cpufreq low-level hardware driver, using the
 	  'interactive' governor for latency-sensitive workloads.
-
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -205,30 +191,35 @@ config CPU_FREQ_GOV_ONDEMAND
 
 	  If in doubt, say N.
 
-config CPUFREQ_ID_PERFLOCK
-	bool "Intellidemand Performance Lock"
-	depends on CPU_FREQ_GOV_INTELLIDEMAND
-	default	n
-	help
-		Minimum CPU performance lock for Intellidemand governor
-
-config CPU_FREQ_GOV_ONDEMANDPLUS
-	tristate "'ondemandplus' cpufreq policy governor"
+config CPU_FREQ_GOV_SMARTMAX
+	tristate "'smartmax' cpufreq policy governor"
 	select CPU_FREQ_TABLE
 	help
-	  'ondemandplus' - This driver adds a dynamic cpufreq policy 
-	  governor. The governor does a periodic polling and 
-	  changes frequency based on the CPU utilization.
-	  The support for this governor depends on CPU capability to
-	  do fast frequency switching (i.e, very low latency frequency
-	  transitions). 
+	  'smartmax' combined ondemand and smartass2
 
-	  To compile this driver as a module, choose M here: the
-	  module will be called cpufreq_ondemandplus.
+config CPU_FREQ_GOV_SMARTMAX_TEGRA
+	bool "'smartmax' for tegra"
+	depends on CPU_FREQ_GOV_SMARTMAX
 
-	  For details, take a look at linux/Documentation/cpu-freq.
+config CPU_FREQ_GOV_SMARTMAX_30
+	bool "'smartmax' for 3.0 and 3.1 kernels"
+	depends on CPU_FREQ_GOV_SMARTMAX
 
-	  If in doubt, say N.
+config CPU_FREQ_GOV_SMARTMAX_ENRC2B
+	bool "'smartmax' defaults for enrc2b"
+	depends on CPU_FREQ_GOV_SMARTMAX
+
+config CPU_FREQ_GOV_SMARTMAX_PRIMOU
+	bool "'smartmax' defaults for primou"
+	depends on CPU_FREQ_GOV_SMARTMAX
+
+config CPU_FREQ_GOV_SMARTMAX_M7
+	bool "'smartmax' defaults for m7"
+	depends on CPU_FREQ_GOV_SMARTMAX
+
+config CPU_FREQ_GOV_SMARTMAX_HAMMERHEAD
+	bool "'smartmax' defaults for hammerhead"
+	depends on CPU_FREQ_GOV_SMARTMAX
 
 config CPU_FREQ_GOV_INTERACTIVE
 	tristate "'interactive' cpufreq policy governor"
@@ -269,44 +260,6 @@ config CPU_FREQ_GOV_CONSERVATIVE
 	  For details, take a look at linux/Documentation/cpu-freq.
 
 	  If in doubt, say N.
-
-config CPU_FREQ_GOV_INTELLIDEMAND
-        tristate "'intellidemand' cpufreq policy governor"
-        select CPU_FREQ_TABLE
-        help
-          'intellidemand' - This driver adds a dynamic cpufreq policy governor.
-          The governor does a periodic polling and
-          changes frequency based on the CPU utilization.
-          The support for this governor depends on CPU capability to
-          do fast frequency switching (i.e, very low latency frequency
-          transitions). with browsing detection based on GPU loading
-
-          To compile this driver as a module, choose M here: the
-          module will be called cpufreq_ondemand.
-
-          For details, take a look at linux/Documentation/cpu-freq.
-
-          If in doubt, say N.
-
-config INTELLI_MAX_ACTIVE_FREQ
-	int "Max Active Freq for Intellidemand"
-	depends on CPU_FREQ_GOV_INTELLIDEMAND
-	default	1512000
-	help
-		Set default max active frequency for intellidemand
-
-config INTELLI_MAX_INACTIVE_FREQ
-	int "Max Inactive Freq for Intellidemand"
-	depends on CPU_FREQ_GOV_INTELLIDEMAND
-	default	1134000
-	help
-		Set default max inactive frequency for intellidemand
-
-config CPUFREQ_LIMIT_MAX_FREQ
-	bool "Limit Max Freq"
-	depends on CPU_FREQ_GOV_INTELLIDEMAND
-	help
-		Limit Max Freq while screen is on for Intellidemand governor
 
 config CPU_FREQ_GOV_INTELLIACTIVE
 	tristate "'intelliactive' cpufreq policy governor"

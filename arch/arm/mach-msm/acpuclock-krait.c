@@ -66,7 +66,11 @@ static void __set_pri_clk_src(struct scalable *sc, u32 pri_src_sel)
 
 	regval = get_l2_indirect_reg(sc->l2cpmr_iaddr);
 	regval &= ~0x3;
-	regval |= (pri_src_sel & 0x3);
+	regval |= pri_src_sel;
+	if (sc != &drv.scalable[L2]) {
+		regval &= ~(0x3 << 8);
+		regval |= pri_src_sel << 8;
+	}
 	set_l2_indirect_reg(sc->l2cpmr_iaddr, regval);
 	/* Wait for switch to complete. */
 	mb();
@@ -101,7 +105,11 @@ static void __cpuinit set_sec_clk_src(struct scalable *sc, u32 sec_src_sel)
 
 	regval = get_l2_indirect_reg(sc->l2cpmr_iaddr);
 	regval &= ~(0x3 << 2);
-	regval |= ((sec_src_sel & 0x3) << 2);
+	regval |= sec_src_sel << 2;
+	if (sc != &drv.scalable[L2]) {
+		regval &= ~(0x3 << 10);
+		regval |= sec_src_sel << 10;
+	}
 	set_l2_indirect_reg(sc->l2cpmr_iaddr, regval);
 	/* Wait for switch to complete. */
 	mb();
@@ -440,7 +448,7 @@ static int calculate_vdd_dig(const struct acpu_level *tgt)
 		   max(l2_pll_vdd_dig, cpu_pll_vdd_dig));
 }
 
-static bool enable_boost = true;
+static bool enable_boost = false;
 module_param_named(boost, enable_boost, bool, S_IRUGO | S_IWUSR);
 
 static int calculate_vdd_core(const struct acpu_level *tgt)
@@ -753,15 +761,22 @@ static int __cpuinit regulator_init(struct scalable *sc,
 	}
 
 	/*
-	 * Increment the L2 HFPLL regulator refcount if _this_ CPU's frequency
-	 * requires a corresponding target L2 frequency that needs the L2 to
-	 * run off of an HFPLL.
+	 * Vote for the L2 HFPLL regulators if _this_ CPU's frequency requires
+	 * a corresponding target L2 frequency that needs the L2 an HFPLL.
 	 */
-	if (drv.l2_freq_tbl[acpu_level->l2_level].speed.src == HFPLL)
-		l2_vreg_count++;
+	if (drv.l2_freq_tbl[acpu_level->l2_level].speed.src == HFPLL) {
+		ret = enable_l2_regulators();
+		if (ret) {
+			dev_err(drv.dev, "enable_l2_regulators() failed (%d)\n",
+				ret);
+			goto err_l2_regs;
+		}
+	}
 
 	return 0;
 
+err_l2_regs:
+	regulator_disable(sc->vreg[VREG_CORE].reg);
 err_core_conf:
 	regulator_put(sc->vreg[VREG_CORE].reg);
 err_core_get:
@@ -810,6 +825,8 @@ static int __cpuinit init_clock_sources(struct scalable *sc,
 	/* Set PRI_SRC_SEL_HFPLL_DIV2 divider to div-2. */
 	regval = get_l2_indirect_reg(sc->l2cpmr_iaddr);
 	regval &= ~(0x3 << 6);
+	if (sc != &drv.scalable[L2])
+		regval &= ~(0x3 << 14);
 	set_l2_indirect_reg(sc->l2cpmr_iaddr, regval);
 
 	/* Enable and switch to the target clock source. */
@@ -891,7 +908,7 @@ static int __cpuinit per_cpu_init(int cpu)
 			ret = -ENODEV;
 			goto err_table;
 		}
-		dev_dbg(drv.dev, "CPU%d is running at an unknown rate. Defaulting to %lu KHz.\n",
+		dev_warn(drv.dev, "CPU%d is running at an unknown rate. Defaulting to %lu KHz.\n",
 			cpu, acpu_level->speed.khz);
 	} else {
 		dev_dbg(drv.dev, "CPU%d is running at %lu KHz\n", cpu,
@@ -937,60 +954,67 @@ static void __init bus_init(const struct l2_level *l2_level)
 		dev_err(drv.dev, "initial bandwidth req failed (%d)\n", ret);
 }
 
-#define MAX_VDD 1300
-#define MIN_VDD 700
+#ifdef CONFIG_CPU_FREQ_MSM
+static struct cpufreq_frequency_table freq_table[NR_CPUS][35];
 
-ssize_t acpuclk_get_vdd_levels_str(char *buf)
+#ifdef CONFIG_MSM_CPU_VOLTAGE_CONTROL
+#define CPU_VDD_MAX		1100
+#define CPU_VDD_MIN		675
+
+static unsigned int cnt;
+
+ssize_t show_UV_mV_table(struct cpufreq_policy *policy,	char *buf)
 {
-    
 	int i, len = 0;
-    
-	if (buf) {
-		for (i = 0; drv.acpu_freq_tbl[i].speed.khz; i++) {
-            if (drv.acpu_freq_tbl[i].use_for_scaling) {
-                len += sprintf(buf + len, "%lumhz: %i mV\n",
-                           drv.acpu_freq_tbl[i].speed.khz/1000,
-                           drv.acpu_freq_tbl[i].vdd_core/1000 );
-            }
-		}
+
+	if (!buf)
+		return -EINVAL;
+
+	for (i = 0; drv.acpu_freq_tbl[i].speed.khz; i++) {
+		if (!drv.acpu_freq_tbl[i].use_for_scaling)
+			continue;
+
+		len += sprintf(buf + len, "%lumhz: %i mV\n",
+			drv.acpu_freq_tbl[i].speed.khz / 1000,
+				drv.acpu_freq_tbl[i].vdd_core / 1000);
 	}
 	return len;
 }
 
-ssize_t acpuclk_set_vdd(char *buf)
+ssize_t store_UV_mV_table(struct cpufreq_policy *policy, char *buf,
+			  size_t count)
 {
-	unsigned int cur_volt;
-	char count[10];
-	int i;
-    int ret = 0;
-    
-	if (!buf)
-		return -EINVAL;
-    
-	for (i = 0; i < drv.acpu_freq_tbl[i].speed.khz; i++) {
-        if (drv.acpu_freq_tbl[i].use_for_scaling) {
-            ret = sscanf(buf, "%d", &cur_volt);
-        
-            if (ret != 1)
+	unsigned int val;
+	char size_cur[4];
+	int i, ret = 0;
+
+	if (cnt) {
+		cnt = 0;
                 return -EINVAL;
-        
-            if (cur_volt > MAX_VDD) {
-                cur_volt = MAX_VDD;
-            } else if (cur_volt < MIN_VDD) {
-                cur_volt = MIN_VDD;
-            }
-        
-            drv.acpu_freq_tbl[i].vdd_core = cur_volt*1000;
-                
-            ret = sscanf(buf, "%s", count);
-            buf += (strlen(count)+1);
-        }
+	}
+
+	for (i = 0; i < ARRAY_SIZE(*freq_table); i++) {
+		if (!drv.acpu_freq_tbl[i].use_for_scaling)
+			continue;
+
+		ret = sscanf(buf, "%u", &val);
+		if (!ret)
+			return -EINVAL;
+
+		if (val > CPU_VDD_MAX)
+			val = CPU_VDD_MAX;
+		else if (val < CPU_VDD_MIN)
+			val = CPU_VDD_MIN;
+
+		drv.acpu_freq_tbl[i].vdd_core = val * 1000;
+
+		ret = sscanf(buf, "%s", size_cur);
+		buf += strlen(size_cur) + 1;
+		cnt = strlen(size_cur);
 	}
 	return ret;
 }
-
-#ifdef CONFIG_CPU_FREQ_MSM
-static struct cpufreq_frequency_table freq_table[NR_CPUS][35];
+#endif
 
 static void __init cpufreq_table_init(void)
 {
@@ -1246,7 +1270,7 @@ static void __init hw_init(void)
 	l2_level = find_cur_l2_level();
 	if (!l2_level) {
 		l2_level = drv.l2_freq_tbl;
-		dev_dbg(drv.dev, "L2 is running at an unknown rate. Defaulting to %lu KHz.\n",
+		dev_warn(drv.dev, "L2 is running at an unknown rate. Defaulting to %lu KHz.\n",
 			l2_level->speed.khz);
 	} else {
 		dev_dbg(drv.dev, "L2 is running at %lu KHz\n",

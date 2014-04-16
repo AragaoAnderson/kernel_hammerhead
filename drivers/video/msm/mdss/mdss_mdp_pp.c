@@ -19,7 +19,6 @@
 #include <linux/uaccess.h>
 #include <linux/spinlock.h>
 #include <linux/delay.h>
-
 #if defined(CONFIG_LCD_KCAL)
 #include <mach/board_lge.h>
 extern int g_kcal_r;
@@ -27,6 +26,7 @@ extern int g_kcal_g;
 extern int g_kcal_b;
 extern struct kcal_data kcal_value;
 #endif
+
 struct mdp_csc_cfg mdp_csc_convert[MDSS_MDP_MAX_CSC] = {
 	[MDSS_MDP_CSC_RGB2RGB] = {
 		0,

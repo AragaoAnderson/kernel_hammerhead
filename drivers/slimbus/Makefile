@@ -1,3 +1,4 @@
+CFLAGS_slimbus.o += -Os
 #
 # Makefile for kernel slimbus framework.
 #

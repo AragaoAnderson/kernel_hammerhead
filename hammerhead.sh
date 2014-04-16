@@ -9,13 +9,13 @@ restore='\033[0m'
 clear
 
 # Piasek Kernel Version
-# BASE_SAND_VER="Nexus5Experience"
-# VER="-STOCK"
-# SAND_VER=$BASE_SAND_VER$VER
+BASE_SAND_VER="Nexus5Experience"
+VER="-AOSP"
+SAND_VER=$BASE_SAND_VER$VER
 
 # Piasek Variables
-# export LOCALVERSION="-"`echo $SAND_VER`
-export CROSS_COMPILE=/home/anderson/android/gcc/bin/arm-eabi-
+export LOCALVERSION="-"`echo $SAND_VER`
+export CROSS_COMPILE=/home/anderson/android/linaro_4.10/bin/arm-eabi-
 export ARCH=arm
 export SUBARCH=arm
 export KBUILD_BUILD_USER=anderson
@@ -68,9 +68,9 @@ echo "Making: Piasek Mako Defconfig"
 echo "-------------------------"
 echo -e "${restore}"
 
-make "hammerhead_defconfig"
+make "n5x_defconfig"
 #make -j3 > /dev/null
-make -j4
+make -j8
 
 echo -e "${green}"
 echo "-------------------------"
