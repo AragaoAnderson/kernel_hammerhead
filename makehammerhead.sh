@@ -103,9 +103,9 @@ fi;
 
 if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
         echo "${bldcya}***** Final Touch for Kernel *****${txtrst}"
-	rm $KERNELDIR/out/kernel/zImage >> /dev/null;
+	rm $KERNELDIR/out/zImage >> /dev/null;
         cp $KERNELDIR/arch/arm/boot/zImage-dtb $KERNELDIR/out/zImage;
-        stat $KERNELDIR/out/kernel/zImage || exit 1;
+        stat $KERNELDIR/out/zImage || exit 1;
 	
 	echo "--- Creating boot.img ---"
 	# copy all needed to out kernel folder
