@@ -8,7 +8,7 @@ else
 fi;
 
 export PARENT_DIR=`readlink -f ${KERNELDIR}/..`;
-export INITRAMFS_SOURCE=`readlink -f ${KERNELDIR}/../ramdisk_msm`;
+export INITRAMFS_SOURCE=`readlink -f ${KERNELDIR}/out/ramdisk_msm`;
 export INITRAMFS_TMP=${KERNELDIR}/tmp/initramfs_source;
 
 # check if parallel installed, if not install
