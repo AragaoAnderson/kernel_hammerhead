@@ -73,8 +73,8 @@ echo "${bldcya}Building => Kernel";
 
 # remove previous zImage files
 if [ -e $KERNELDIR/zImage ]; then
-	rm $KERNELDIR/zImage;
-	rm $KERNELDIR/boot.img;
+	rm $KERNELDIR/out/kernel/zImage;
+	rm ../hammerhead/boot.img;
 fi;
 if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
 	rm $KERNELDIR/arch/arm/boot/zImage;
@@ -109,8 +109,7 @@ if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
 	
 	echo "--- Creating boot.img ---"
 	# copy all needed to out kernel folder
-	cd $KERNELDIR/out/
-	zip -r N5X-HAMMERHEAD-AOSP.zip .
+        ./utilities/mkbootimg --kernel $KERNELDIR/out/kernel/zImage --cmdline 'console=ttyHSL0,115200,n8 androidboot.hardware=hammerhead user_debug=31 msm_watchdog_v2.enable=1' --base 0x00000000 --pagesize 2048 --ramdisk_offset 0x02900000 --tags_offset 0x02700000 --ramdisk ramdisk.gz --output ../hammerhead/boot.img
 	echo "${bldcya}***** Ready *****${txtrst}";
 	# finished? get elapsed time
 	res2=$(date +%s.%N)
