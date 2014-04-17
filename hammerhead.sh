@@ -15,11 +15,11 @@ clear
 
 # Piasek Variables
 # export LOCALVERSION="-"`echo $SAND_VER`
-export CROSS_COMPILE=/home/anderson/android/gcc/bin/arm-eabi-
+export CROSS_COMPILE=/home/anderson/android/arm-eabi-4.8/bin/arm-eabi-
 export ARCH=arm
 export SUBARCH=arm
-export KBUILD_BUILD_USER=anderson
-export KBUILD_BUILD_HOST="ubuntu"
+export KBUILD_BUILD_USER=Anderson
+export KBUILD_BUILD_HOST="mint"
 
 DATE_START=$(date +"%s")
 
