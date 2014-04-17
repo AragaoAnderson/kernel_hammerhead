@@ -72,7 +72,7 @@ fi;
 echo "${bldcya}Building => Kernel";
 
 # remove previous zImage files
-if [ -e $KERNELDIR/zImage ]; then
+if [ -e $KERNELDIR/out/zImage ]; then
 	rm $KERNELDIR/out/zImage;
 	rm $KERNELDIR/out/boot.img;
 fi;
