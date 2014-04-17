@@ -441,10 +441,6 @@ static void usb_qdss_disconnect_work(struct work_struct *work)
 
 	pr_debug("usb_qdss_disconnect_work\n");
 
-	status = uninit_data(qdss->data);
-	if (status)
-		pr_err("%s: uninit_data error\n", __func__);
-
 	/* notify qdss to cancell all active transfers*/
 	if (qdss->ch.notify) {
 		qdss->ch.notify(qdss->ch.priv, USB_QDSS_DISCONNECT, NULL,
@@ -462,22 +458,22 @@ static void qdss_disable(struct usb_function *f)
 {
 	struct f_qdss	*qdss = func_to_qdss(f);
 	unsigned long flags;
+	int status;
 
 	pr_debug("qdss_disable\n");
 
 	spin_lock_irqsave(&qdss->lock, flags);
-	if (!qdss->usb_connected) {
-		spin_unlock_irqrestore(&qdss->lock, flags);
-		return;
-	}
-
 	qdss->usb_connected = 0;
 	spin_unlock_irqrestore(&qdss->lock, flags);
 
 	/*cancell all active xfers*/
 	qdss_eps_disable(f);
 
-	queue_work(qdss->wq, &qdss->disconnect_w);
+	status = uninit_data(qdss->data);
+	if (status)
+		pr_err("%s: uninit_data error\n", __func__);
+
+	schedule_work(&qdss->disconnect_w);
 }
 
 static void usb_qdss_connect_work(struct work_struct *work)
@@ -525,7 +521,6 @@ static int qdss_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 	if (gadget->speed != USB_SPEED_SUPER &&
 		gadget->speed != USB_SPEED_HIGH) {
 			pr_err("qdss_st_alt: qdss supportes HS or SS only\n");
-			ret = -EINVAL;
 			goto fail;
 	}
 
@@ -567,7 +562,7 @@ static int qdss_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 		qdss->usb_connected = 1;
 
 	if (qdss->usb_connected && ch->app_conn)
-		queue_work(qdss->wq, &qdss->connect_w);
+		schedule_work(&qdss->connect_w);
 
 	return 0;
 fail:
@@ -615,13 +610,7 @@ static int qdss_bind_config(struct usb_configuration *c, const char *name)
 			spin_unlock_irqrestore(&d_lock, flags);
 			return -ENOMEM;
 		}
-		spin_unlock_irqrestore(&d_lock, flags);
-		qdss->wq = create_singlethread_workqueue(name);
-		if (!qdss->wq) {
-			kfree(qdss);
-			return -ENOMEM;
-		}
-		spin_lock_irqsave(&d_lock, flags);
+
 		ch = &qdss->ch;
 		ch->name = name;
 		list_add_tail(&ch->list, &usb_qdss_ch_list);
@@ -776,13 +765,6 @@ struct usb_qdss_ch *usb_qdss_open(const char *name, void *priv,
 			spin_unlock_irqrestore(&d_lock, flags);
 			return ERR_PTR(-ENOMEM);
 		}
-		spin_unlock_irqrestore(&d_lock, flags);
-		qdss->wq = create_singlethread_workqueue(name);
-		if (!qdss->wq) {
-			kfree(qdss);
-			return ERR_PTR(-ENOMEM);
-		}
-		spin_lock_irqsave(&d_lock, flags);
 		ch = &qdss->ch;
 		list_add_tail(&ch->list, &usb_qdss_ch_list);
 	} else {
@@ -799,7 +781,7 @@ struct usb_qdss_ch *usb_qdss_open(const char *name, void *priv,
 
 	/* the case USB cabel was connected befor qdss called  qdss_open*/
 	if (qdss->usb_connected == 1)
-		queue_work(qdss->wq, &qdss->connect_w);
+		schedule_work(&qdss->connect_w);
 
 	return ch;
 }
@@ -808,7 +790,6 @@ EXPORT_SYMBOL(usb_qdss_open);
 void usb_qdss_close(struct usb_qdss_ch *ch)
 {
 	struct f_qdss *qdss = ch->priv_usb;
-	struct usb_gadget *gadget = qdss->cdev->gadget;
 	unsigned long flags;
 
 	pr_debug("usb_qdss_close\n");
@@ -820,7 +801,7 @@ void usb_qdss_close(struct usb_qdss_ch *ch)
 	ch->app_conn = 0;
 	spin_unlock_irqrestore(&d_lock, flags);
 
-	msm_dwc3_restart_usb_session(gadget);
+	msm_dwc3_restart_usb_session();
 }
 EXPORT_SYMBOL(usb_qdss_close);
 
@@ -837,7 +818,7 @@ static void qdss_cleanup(void)
 		_ch = list_entry(act, struct usb_qdss_ch, list);
 		qdss = container_of(_ch, struct f_qdss, ch);
 		spin_lock_irqsave(&d_lock, flags);
-		destroy_workqueue(qdss->wq);
+
 		if (!_ch->priv) {
 			list_del(&_ch->list);
 			kfree(qdss);
