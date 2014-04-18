@@ -21,6 +21,11 @@ res1=$(date +%s.%N)
 
 echo "${bldcya}***** Setting up Environment *****${txtrst}";
 
+# CCache
+export USE_CCACHE=1
+export CCACHE_DIR=./tmp
+export CCACHE_LOGFILE=./tmp/ccache.log
+
 . ./setup.sh ${1} || exit 1;
 
 config=n5x_defconfig
