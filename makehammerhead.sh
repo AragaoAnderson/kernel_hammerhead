@@ -110,7 +110,9 @@ if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
 	echo "--- Creating boot.img ---"
 	# copy all needed to out kernel folder
         ./utilities/mkbootimg --kernel $KERNELDIR/out/zImage --cmdline 'console=ttyHSL0,115200,n8 androidboot.hardware=hammerhead user_debug=31 msm_watchdog_v2.enable=1' --base 0x00000000 --pagesize 2048 --ramdisk_offset 0x02900000 --tags_offset 0x02700000 --ramdisk ramdisk.gz --output $KERNELDIR/out/boot.img
-	echo "${bldcya}***** Ready *****${txtrst}";
+        echo "${bldcya}***** Flashing boot.img ******${txtrst}";
+	fastboot flash boot $KERNELDIR/out/boot.img
+	echo "${bldcya}***** All done! *****${txtrst}";
 	# finished? get elapsed time
 	res2=$(date +%s.%N)
 	echo "${bldgrn}Total time elapsed: ${txtrst}${grn}$(echo "($res2 - $res1) / 60"|bc ) minutes ($(echo "$res2 - $res1"|bc ) seconds) ${txtrst}";	
