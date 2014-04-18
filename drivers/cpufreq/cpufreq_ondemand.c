@@ -22,7 +22,6 @@
 #include <linux/hrtimer.h>
 #include <linux/tick.h>
 #include <linux/ktime.h>
-#include <linux/smpboot.h>
 #include <linux/sched.h>
 #include <linux/workqueue.h>
 #include <linux/slab.h>
@@ -108,7 +107,6 @@ struct cpu_dbs_info_s {
 	atomic_t sync_enabled;
 };
 static DEFINE_PER_CPU(struct cpu_dbs_info_s, od_cpu_dbs_info);
-static DEFINE_PER_CPU(struct task_struct *, sync_thread);
 
 static inline void dbs_timer_init(struct cpu_dbs_info_s *dbs_info);
 static inline void dbs_timer_exit(struct cpu_dbs_info_s *dbs_info);
@@ -1030,117 +1028,6 @@ static struct notifier_block dbs_migration_nb = {
 	.notifier_call = dbs_migration_notify,
 };
 
-static int sync_pending(struct cpu_dbs_info_s *this_dbs_info)
-{
-	return atomic_read(&this_dbs_info->src_sync_cpu) >= 0;
-}
-
-static int dbs_sync_should_run(unsigned int dest_cpu)
-{
-	struct cpu_dbs_info_s *this_dbs_info;
-
-	this_dbs_info = &per_cpu(od_cpu_dbs_info, dest_cpu);
-
-	return sync_pending(this_dbs_info);
-}
-
-static void run_dbs_sync(unsigned int dest_cpu)
-{
-	int src_cpu, cpu = dest_cpu;
-	unsigned int src_freq, src_max_load;
-	struct cpu_dbs_info_s *this_dbs_info, *src_dbs_info;
-	struct cpufreq_policy *policy;
-	int delay;
-
-	this_dbs_info = &per_cpu(od_cpu_dbs_info, cpu);
-
-	get_online_cpus();
-
-	src_cpu = atomic_read(&this_dbs_info->src_sync_cpu);
-	src_dbs_info = &per_cpu(od_cpu_dbs_info, src_cpu);
-	if (src_dbs_info != NULL && src_dbs_info->cur_policy != NULL) {
-		src_freq = src_dbs_info->cur_policy->cur;
-		src_max_load = src_dbs_info->max_load;
-	} else {
-		src_freq = dbs_tuners_ins.sync_freq;
-		src_max_load = 0;
-	}
-
-	if (lock_policy_rwsem_write(cpu) < 0)
-		goto bail_acq_sema_failed;
-
-	if (!atomic_read(&this_dbs_info->sync_enabled)) {
-		atomic_set(&this_dbs_info->src_sync_cpu, -1);
-		put_online_cpus();
-		unlock_policy_rwsem_write(cpu);
-		return;
-	}
-
-	policy = this_dbs_info->cur_policy;
-	if (!policy) {
-		/* CPU not using ondemand governor */
-		goto bail_incorrect_governor;
-	}
-	delay = usecs_to_jiffies(dbs_tuners_ins.sampling_rate);
-
-
-	if (policy->cur < src_freq) {
-		/* cancel the next ondemand sample */
-		cancel_delayed_work_sync(&this_dbs_info->work);
-
-		/*
-		 * Arch specific cpufreq driver may fail.
-		 * Don't update governor frequency upon failure.
-		 */
-		if (__cpufreq_driver_target(policy, src_freq,
-					    CPUFREQ_RELATION_L) >= 0) {
-			policy->cur = src_freq;
-			if (src_max_load > this_dbs_info->max_load) {
-				this_dbs_info->max_load = src_max_load;
-				this_dbs_info->prev_load = src_max_load;
-			}
-		}
-
-		/* reschedule the next ondemand sample */
-		mutex_lock(&this_dbs_info->timer_mutex);
-		schedule_delayed_work_on(cpu, &this_dbs_info->work,
-					 delay);
-		mutex_unlock(&this_dbs_info->timer_mutex);
-	}
-
-bail_incorrect_governor:
-	unlock_policy_rwsem_write(cpu);
-bail_acq_sema_failed:
-	put_online_cpus();
-	atomic_set(&this_dbs_info->src_sync_cpu, -1);
-}
-
-static void dbs_sync_set_prio(unsigned int policy, unsigned int prio)
-{
-	struct sched_param param = { .sched_priority = prio };
-
-	sched_setscheduler(current, policy, &param);
-}
-
-static void dbs_sync_park(unsigned int cpu)
-{
-	dbs_sync_set_prio(SCHED_NORMAL, 0);
-}
-
-static void dbs_sync_unpark(unsigned int cpu)
-{
-	dbs_sync_set_prio(SCHED_FIFO, MAX_RT_PRIO - 1);
-}
-
-static struct smp_hotplug_thread dbs_sync_threads = {
-	.store		= &sync_thread,
-	.thread_should_run = dbs_sync_should_run,
-	.thread_fn	= run_dbs_sync,
-	.thread_comm	= "dbs_sync/%u",
-	.park		= dbs_sync_park,
-	.unpark		= dbs_sync_unpark,
-};
-
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				   unsigned int event)
 {
@@ -1275,7 +1162,7 @@ static int __init cpufreq_gov_dbs_init(void)
 {
 	u64 idle_time;
 	unsigned int i;
-	int rc, cpu = get_cpu();
+	int cpu = get_cpu();
 
 	idle_time = get_cpu_idle_time_us(cpu, NULL);
 	put_cpu();
@@ -1309,10 +1196,6 @@ static int __init cpufreq_gov_dbs_init(void)
 
 		atomic_set(&this_dbs_info->src_sync_cpu, -1);
 	}
-
-	rc = smpboot_register_percpu_thread(&dbs_sync_threads);
-	if (rc)
-		printk(KERN_ERR "Failed to register dbs_sync threads\n");
 
 	return cpufreq_register_governor(&cpufreq_gov_ondemand);
 }
