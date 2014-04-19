@@ -17,7 +17,7 @@ OUT_DIR="$(pwd)/out"
 #compile neccesities
 USERCCDIR="$HOME/.ccache"
 CODENAME="hammerhead"
-DEFCONFIG="bricked_defconfig"
+DEFCONFIG="n5x_defconfig"
 NRJOBS=$(( $(nproc) * 2 ))
 #ftpstuff
 RETRY="60s";
@@ -26,9 +26,9 @@ HOST="host.com"
 USER="user"
 PASS='pass'
 
-#if we are not called with an argument, default to branch master
+#if we are not called with an argument, default to branch br
 if [ -z "$1" ]; then
-  BRANCH="master"
+  BRANCH="br"
   echo "[BUILD]: WARNING: Not called with branchname, defaulting to $BRANCH!";
   echo "[BUILD]: If this is not what you want, call this script with the branchname.";
 else
@@ -184,8 +184,8 @@ echo "[BUILD]: Cleaning kernel (make mrproper)...";
 make mrproper
 echo "[BUILD]: Using defconfig: $DEFCONFIG...";
 make $DEFCONFIG
-echo "[BUILD]: Changing CONFIG_LOCALVERSION to: -bricked-"$CODENAME"-"$BRANCH" ...";
-sed -i "/CONFIG_LOCALVERSION=\"/c\CONFIG_LOCALVERSION=\"-bricked-"$CODENAME"-"$BRANCH"\"" .config
+echo "[BUILD]: Changing CONFIG_LOCALVERSION to: -Nexus5Experience-AOSP ...";
+sed -i "/CONFIG_LOCALVERSION=\"/c\CONFIG_LOCALVERSION=\"-Nexus5Experience-AOSP\"" .config
 
 #kcontrol necessities
 if [ $(cat .config | grep 'CONFIG_ARCH_MSM=y' | tail -n1) == "CONFIG_ARCH_MSM=y" ]; then
