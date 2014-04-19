@@ -1177,7 +1177,7 @@ static ssize_t store_step_up_interim_hispeed(struct kobject *a,
 	int ret;
 	ret = sscanf(buf, "%u", &input);
 
-	if (ret != 1 || input > 1512000 ||
+	if (ret != 1 || input > 2265600 ||
 			input < 0) {
 		return -EINVAL;
 	}
