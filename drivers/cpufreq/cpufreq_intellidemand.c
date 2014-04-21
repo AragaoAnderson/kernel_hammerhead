@@ -263,7 +263,7 @@ static struct dbs_tuners {
         .two_phase_freq = 0,
         .ui_sampling_rate = DEF_UI_DYNAMIC_SAMPLING_RATE,
         .ui_timeout = DBS_UI_SAMPLING_TIMEOUT,
-        .enable_boost_cpu = 0,
+        .enable_boost_cpu = 1,
 };
 
 static inline u64 get_cpu_idle_time_jiffy(unsigned int cpu, u64 *wall)
