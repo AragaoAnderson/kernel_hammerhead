@@ -44,22 +44,22 @@ static struct workqueue_struct *cpu_boost_wq;
 
 static struct work_struct input_boost_work;
 
-static unsigned int boost_ms = 100;
+static unsigned int boost_ms = 30;
 module_param(boost_ms, uint, 0644);
 
-static unsigned int sync_threshold = 1728000;
+static unsigned int sync_threshold = 1036800;
 module_param(sync_threshold, uint, 0644);
 
 static unsigned int input_boost_freq = 1267200;
 module_param(input_boost_freq, uint, 0644);
 
-static unsigned int input_boost_ms = 1000;
+static unsigned int input_boost_ms = 100;
 module_param(input_boost_ms, uint, 0644);
 
 static unsigned int migration_load_threshold = 15;
 module_param(migration_load_threshold, uint, 0644);
 
-static bool load_based_syncs = 1;
+static bool load_based_syncs = true;
 module_param(load_based_syncs, bool, 0644);
 
 static u64 last_input_time;
@@ -90,6 +90,9 @@ static int boost_adjust_notify(struct notifier_block *nb, unsigned long val, voi
 	pr_debug("CPU%u policy min before boost: %u kHz\n",
 		 cpu, policy->min);
 	pr_debug("CPU%u boost min: %u kHz\n", cpu, min);
+
+	if (policy->cur > min)
+		return NOTIFY_OK;
 
 	cpufreq_verify_within_limits(policy, min, UINT_MAX);
 
@@ -244,6 +247,9 @@ static int boost_migration_notify(struct notifier_block *nb,
 	if (thread == current)
 		return NOTIFY_OK;
 
+	if (mnd->dest_cpu == mnd->src_cpu)
+		return NOTIFY_OK;
+
 	pr_debug("Migration: CPU%d --> CPU%d\n", mnd->src_cpu, mnd->dest_cpu);
 	spin_lock_irqsave(&s->lock, flags);
 	s->pending = true;
@@ -299,7 +305,7 @@ static void cpuboost_input_event(struct input_handle *handle,
 	if (work_pending(&input_boost_work))
 		return;
 
-	queue_work(cpu_boost_wq, &input_boost_work);
+	//queue_work(cpu_boost_wq, &input_boost_work);
 	last_input_time = ktime_to_us(ktime_get());
 }
 
