@@ -225,7 +225,8 @@ on post-fs-data
     write /sys/devices/system/cpu/cpufreq/interactive/timer_rate 20000
     write /sys/devices/system/cpu/cpufreq/interactive/sampling_down_factor 100000
     write /sys/devices/system/cpu/cpufreq/interactive/timer_slack 20000
-    write /sys/module/cpu_boost/parameters/boost_ms 10
+    write /sys/devices/system/cpu/cpufreq/intellidemand/enable_boost_cpu 1
+    write /sys/module/cpu_boost/parameters/boost_ms 20
     write /sys/module/cpu_boost/parameters/sync_threshold 1728000
     write /sys/module/cpu_boost/parameters/input_boost_freq 1497600
     write /sys/module/cpu_boost/parameters/input_boost_ms 40
