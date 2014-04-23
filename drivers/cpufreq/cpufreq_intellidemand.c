@@ -55,8 +55,8 @@
 #define DBS_UI_SAMPLING_TIMEOUT                        (80)
 
 #define DEF_FREQ_STEP                                (25)
-#define DEF_STEP_UP_EARLY_HISPEED                (1728000)
-#define DEF_STEP_UP_INTERIM_HISPEED                (1958400)
+#define DEF_STEP_UP_EARLY_HISPEED                (1497600)
+#define DEF_STEP_UP_INTERIM_HISPEED                (1728000)
 #define DEF_SAMPLING_EARLY_HISPEED_FACTOR        (2)
 #define DEF_SAMPLING_INTERIM_HISPEED_FACTOR        (3)
 
@@ -87,8 +87,8 @@ static freq_table_idx pre_freq_idx[SUP_CORE_NUM] = {};
 
 #if defined(SMART_UP_SLOW_UP_AT_HIGH_FREQ)
 
-#define SUP_SLOW_UP_FREQUENCY                 (1574400)
-#define SUP_HIGH_SLOW_UP_FREQUENCY         (1728000)
+#define SUP_SLOW_UP_FREQUENCY                 (1728000)
+#define SUP_HIGH_SLOW_UP_FREQUENCY         (2265600)
 #define SUP_SLOW_UP_LOAD                 (80)
 
 typedef struct {
@@ -244,8 +244,8 @@ static struct dbs_tuners {
         .up_threshold_any_cpu_load = DEF_FREQUENCY_UP_THRESHOLD,
         .ignore_nice = 0,
         .powersave_bias = 1,
-        .sync_freq = 1728000,
-        .optimal_freq = 1574400,
+        .sync_freq = 729600,
+        .optimal_freq = 729600,
         //20130711 smart_up 
         .smart_up = SMART_UP_PLUS,
         .smart_slow_up_load = SUP_SLOW_UP_LOAD,
