@@ -58,9 +58,10 @@ echo "0" > $TMPFILE;
 
 	# remove more from from tmp-initramfs ...
 	rm -f $INITRAMFS_TMP/update* >> /dev/null;
-
-	./utilities/mkbootfs $INITRAMFS_TMP | gzip > ramdisk.gz
-
+#	cd ./LZ4RAMDISK/RAMDISK
+#	find . \( ! -regex '.*/\..*' \) | cpio -o -H newc -R root:root | lz4c -l -c1 stdin ../../newinitrd.lz4;
+#	cd ..
+#	cd ..
 	echo "1" > $TMPFILE;
 	echo "${bldcya}***** Ramdisk Generation Completed Successfully *****${txtrst}"
 )&
@@ -114,7 +115,9 @@ if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
 	
 	echo "--- Creating boot.img ---"
 	# copy all needed to out kernel folder
-        ./utilities/mkbootimg --kernel $KERNELDIR/out/zImage --cmdline 'console=ttyHSL0,115200,n8 androidboot.hardware=hammerhead user_debug=31 msm_watchdog_v2.enable=1' --base 0x00000000 --pagesize 2048 --ramdisk_offset 0x02900000 --tags_offset 0x02700000 --ramdisk ramdisk.gz --output $KERNELDIR/out/boot.img
+	abootimg --create $KERNELDIR/out/boot.img -f $KERNELDIR/out/bootimg.cfg -k $KERNELDIR/out/zImage -r ./initrd.lz4;
+
+
         echo "${bldcya}***** Flashing boot.img ******${txtrst}";
 	fastboot flash boot $KERNELDIR/out/boot.img
 	echo "${bldcya}***** All done! *****${txtrst}";
