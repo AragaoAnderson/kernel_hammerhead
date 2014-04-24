@@ -203,6 +203,8 @@ on post-fs-data
     #write /sys/devices/system/cpu/cpufreq/ondemand/sync_freq 960000
     #write /sys/devices/system/cpu/cpufreq/ondemand/up_threshold_any_cpu_load 80
     write /sys/devices/system/cpu/cpufreq/intellidemand/enable_boost_cpu 1
+    write /sys/devices/system/cpu/cpufreq/intellidemand/io_is_busy 1
+    write /sys/devices/system/cpu/cpufreq/intellidemand/powersave_bias 1
     write /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq 268000
     write /sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq 268000
     write /sys/devices/system/cpu/cpu2/cpufreq/scaling_min_freq 268000
