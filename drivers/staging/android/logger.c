@@ -29,6 +29,9 @@
 
 #include <asm/ioctls.h>
 
+static unsigned int enabled = 1;
+module_param(enabled, uint, S_IWUSR | S_IRUGO);
+
 /*
  * struct logger_log - represents a specific log, such as 'main' or 'radio'
  *
@@ -433,6 +436,20 @@ static ssize_t do_write_log_from_user(struct logger_log *log,
 			 */
 			return -EFAULT;
 
+	/* print as kernel log if the log string starts with "!@" */
+	if (count >= 2) {
+		if (log->buffer[log->w_off] == '!'
+		    && log->buffer[logger_offset(log, log->w_off + 1)] == '@') {
+			char tmp[256];
+			int i;
+			for (i = 0; i < min(count, sizeof(tmp) - 1); i++)
+				tmp[i] =
+				    log->buffer[logger_offset(log, log->w_off + i)];
+			tmp[i] = '\0';
+			printk("%s\n", tmp);
+		}
+	}
+
 	log->w_off = logger_offset(log, log->w_off + count);
 
 	return count;
@@ -451,6 +468,9 @@ ssize_t logger_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	struct logger_entry header;
 	struct timespec now;
 	ssize_t ret = 0;
+
+	if (!enabled)
+		return 0;
 
 	now = current_kernel_time();
 
@@ -728,10 +748,10 @@ static struct logger_log VAR = { \
 	.size = SIZE, \
 };
 
-DEFINE_LOGGER_DEVICE(log_main, LOGGER_LOG_MAIN, 256*1024)
-DEFINE_LOGGER_DEVICE(log_events, LOGGER_LOG_EVENTS, 256*1024)
-DEFINE_LOGGER_DEVICE(log_radio, LOGGER_LOG_RADIO, 256*1024)
-DEFINE_LOGGER_DEVICE(log_system, LOGGER_LOG_SYSTEM, 256*1024)
+DEFINE_LOGGER_DEVICE(log_main, LOGGER_LOG_MAIN, 32*1024)
+DEFINE_LOGGER_DEVICE(log_events, LOGGER_LOG_EVENTS, 32*1024)
+DEFINE_LOGGER_DEVICE(log_radio, LOGGER_LOG_RADIO, 32*1024)
+DEFINE_LOGGER_DEVICE(log_system, LOGGER_LOG_SYSTEM, 32*1024)
 
 static struct logger_log *get_log_from_minor(int minor)
 {

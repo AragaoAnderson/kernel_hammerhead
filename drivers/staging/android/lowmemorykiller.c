@@ -40,6 +40,9 @@
 #include <linux/mutex.h>
 #include <linux/delay.h>
 #include <linux/swap.h>
+#include <linux/fs.h>
+#include <linux/kobject.h>
+#include <linux/slab.h>
 
 #ifdef CONFIG_HIGHMEM
 #define _ZONE ZONE_HIGHMEM
@@ -66,6 +69,10 @@ static int lmk_fast_run = 1;
 
 static unsigned long lowmem_deathpending_timeout;
 
+static struct shrink_control lowmem_notif_sc = {GFP_KERNEL, 0};
+static size_t lowmem_minfree_notif_trigger;
+static struct kobject *lowmem_notify_kobj;
+
 #define lowmem_print(level, x...)			\
 	do {						\
 		if (lowmem_debug_level >= (level))	\
@@ -74,16 +81,16 @@ static unsigned long lowmem_deathpending_timeout;
 
 static int test_task_flag(struct task_struct *p, int flag)
 {
-	struct task_struct *t = p;
+	struct task_struct *t;
 
-	do {
+	for_each_thread(p,t) {
 		task_lock(t);
 		if (test_tsk_thread_flag(t, flag)) {
 			task_unlock(t);
 			return 1;
 		}
 		task_unlock(t);
-	} while_each_thread(p, t);
+	}
 
 	return 0;
 }
@@ -161,6 +168,35 @@ void tune_lmk_zone_param(struct zonelist *zonelist, int classzone_idx,
 	}
 }
 
+#ifdef CONFIG_HIGHMEM
+void adjust_gfp_mask(gfp_t *gfp_mask)
+{
+	struct zone *preferred_zone;
+	struct zonelist *zonelist;
+	enum zone_type high_zoneidx;
+
+	if (current_is_kswapd()) {
+		zonelist = node_zonelist(0, *gfp_mask);
+		high_zoneidx = gfp_zone(*gfp_mask);
+		first_zones_zonelist(zonelist, high_zoneidx, NULL,
+				&preferred_zone);
+
+		if (high_zoneidx == ZONE_NORMAL) {
+			if (zone_watermark_ok_safe(preferred_zone, 0,
+					high_wmark_pages(preferred_zone), 0,
+					0))
+				*gfp_mask |= __GFP_HIGHMEM;
+		} else if (high_zoneidx == ZONE_HIGHMEM) {
+			*gfp_mask |= __GFP_HIGHMEM;
+		}
+	}
+}
+#else
+void adjust_gfp_mask(gfp_t *unused)
+{
+}
+#endif
+
 void tune_lmk_param(int *other_free, int *other_file, struct shrink_control *sc)
 {
 	gfp_t gfp_mask;
@@ -171,6 +207,8 @@ void tune_lmk_param(int *other_free, int *other_file, struct shrink_control *sc)
 	int use_cma_pages;
 
 	gfp_mask = sc->gfp_mask;
+	adjust_gfp_mask(&gfp_mask);
+
 	zonelist = node_zonelist(0, gfp_mask);
 	high_zoneidx = gfp_zone(gfp_mask);
 	first_zones_zonelist(zonelist, high_zoneidx, NULL, &preferred_zone);
@@ -225,6 +263,30 @@ void tune_lmk_param(int *other_free, int *other_file, struct shrink_control *sc)
 	}
 }
 
+static void lowmem_notify_killzone_approach(void);
+
+static int get_free_ram(int *other_free, int *other_file,
+		             struct shrink_control *sc)
+{
+	*other_free = global_page_state(NR_FREE_PAGES);
+
+	if (global_page_state(NR_SHMEM) + total_swapcache_pages <
+		global_page_state(NR_FILE_PAGES))
+		*other_file = global_page_state(NR_FILE_PAGES) -
+						global_page_state(NR_SHMEM) -
+						total_swapcache_pages;
+	else
+		*other_file = 0;
+
+	tune_lmk_param(other_free, other_file, sc);
+
+	if (*other_free < lowmem_minfree_notif_trigger &&
+			*other_file < lowmem_minfree_notif_trigger)
+		return 1;
+	else
+		return 0;
+}
+
 static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 {
 	struct task_struct *tsk;
@@ -245,11 +307,10 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 			return 0;
 	}
 
-	other_free = global_page_state(NR_FREE_PAGES);
-	other_file = global_page_state(NR_FILE_PAGES) -
-						global_page_state(NR_SHMEM);
+	lowmem_notif_sc.gfp_mask = sc->gfp_mask;
 
-	tune_lmk_param(&other_free, &other_file, sc);
+	if (get_free_ram(&other_free, &other_file, sc))
+		lowmem_notify_killzone_approach();
 
 	if (lowmem_adj_size < array_size)
 		array_size = lowmem_adj_size;
@@ -354,14 +415,78 @@ static struct shrinker lowmem_shrinker = {
 	.seeks = DEFAULT_SEEKS * 16
 };
 
+static void lowmem_notify_killzone_approach(void)
+{
+	lowmem_print(3, "notification trigger activated\n");
+	sysfs_notify(lowmem_notify_kobj, NULL,
+			"notify_trigger_active");
+}
+
+static ssize_t lowmem_notify_trigger_active_show(struct kobject *k,
+				struct kobj_attribute *attr, char *buf)
+{
+	int other_free, other_file;
+	if (get_free_ram(&other_free, &other_file, &lowmem_notif_sc))
+		return snprintf(buf, 3, "1\n");
+	else
+		return snprintf(buf, 3, "0\n");
+}
+
+static struct kobj_attribute lowmem_notify_trigger_active_attr =
+	__ATTR(notify_trigger_active, S_IRUGO,
+			lowmem_notify_trigger_active_show, NULL);
+
+static struct attribute *lowmem_notify_default_attrs[] = {
+	&lowmem_notify_trigger_active_attr.attr, NULL,
+};
+
+static ssize_t lowmem_show(struct kobject *k, struct attribute *attr, char *buf)
+{
+	struct kobj_attribute *kobj_attr;
+	kobj_attr = container_of(attr, struct kobj_attribute, attr);
+	return kobj_attr->show(k, kobj_attr, buf);
+}
+
+static const struct sysfs_ops lowmem_notify_ops = {
+	.show = lowmem_show,
+};
+
+static void lowmem_notify_kobj_release(struct kobject *kobj)
+{
+	/* Nothing to be done here */
+}
+
+static struct kobj_type lowmem_notify_kobj_type = {
+	.release = lowmem_notify_kobj_release,
+	.sysfs_ops = &lowmem_notify_ops,
+	.default_attrs = lowmem_notify_default_attrs,
+};
+
 static int __init lowmem_init(void)
 {
+	int rc;
+
+	lowmem_notify_kobj = kzalloc(sizeof(*lowmem_notify_kobj), GFP_KERNEL);
+	if(!lowmem_notify_kobj) {
+		return -ENOMEM;
+	}
+
+	rc = kobject_init_and_add(lowmem_notify_kobj, &lowmem_notify_kobj_type,
+			mm_kobj, "lowmemkiller");
+	if(rc) {
+		kfree(lowmem_notify_kobj);
+		return rc;
+	}
+
 	register_shrinker(&lowmem_shrinker);
+
 	return 0;
 }
 
 static void __exit lowmem_exit(void)
 {
+	kobject_put(lowmem_notify_kobj);
+	kfree(lowmem_notify_kobj);
 	unregister_shrinker(&lowmem_shrinker);
 }
 
@@ -457,6 +582,8 @@ module_param_array_named(minfree, lowmem_minfree, uint, &lowmem_minfree_size,
 			 S_IRUGO | S_IWUSR);
 module_param_named(debug_level, lowmem_debug_level, uint, S_IRUGO | S_IWUSR);
 module_param_named(lmk_fast_run, lmk_fast_run, int, S_IRUGO | S_IWUSR);
+module_param_named(notify_trigger, lowmem_minfree_notif_trigger, uint,
+			 S_IRUGO | S_IWUSR);
 
 module_init(lowmem_init);
 module_exit(lowmem_exit);

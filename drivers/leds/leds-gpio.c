@@ -178,7 +178,8 @@ static struct gpio_leds_priv * __devinit gpio_leds_create_of(struct platform_dev
 	if (!count)
 		return NULL;
 
-	priv = kzalloc(sizeof_gpio_leds_priv(count), GFP_KERNEL);
+	priv = devm_kzalloc(&pdev->dev, sizeof_gpio_leds_priv(count),
+			GFP_KERNEL);
 	if (!priv)
 		return NULL;
 
@@ -215,7 +216,6 @@ static struct gpio_leds_priv * __devinit gpio_leds_create_of(struct platform_dev
 err:
 	for (count = priv->num_leds - 2; count >= 0; count--)
 		delete_gpio_led(&priv->leds[count]);
-	kfree(priv);
 	return NULL;
 }
 
@@ -228,7 +228,6 @@ static struct gpio_leds_priv * __devinit gpio_leds_create_of(struct platform_dev
 {
 	return NULL;
 }
-#define of_gpio_leds_match NULL
 #endif /* CONFIG_OF_GPIO */
 
 
@@ -239,8 +238,9 @@ static int __devinit gpio_led_probe(struct platform_device *pdev)
 	int i, ret = 0;
 
 	if (pdata && pdata->num_leds) {
-		priv = kzalloc(sizeof_gpio_leds_priv(pdata->num_leds),
-				GFP_KERNEL);
+		priv = devm_kzalloc(&pdev->dev,
+				sizeof_gpio_leds_priv(pdata->num_leds),
+					GFP_KERNEL);
 		if (!priv)
 			return -ENOMEM;
 
@@ -253,7 +253,6 @@ static int __devinit gpio_led_probe(struct platform_device *pdev)
 				/* On failure: unwind the led creations */
 				for (i = i - 1; i >= 0; i--)
 					delete_gpio_led(&priv->leds[i]);
-				kfree(priv);
 				return ret;
 			}
 		}
@@ -270,14 +269,13 @@ static int __devinit gpio_led_probe(struct platform_device *pdev)
 
 static int __devexit gpio_led_remove(struct platform_device *pdev)
 {
-	struct gpio_leds_priv *priv = dev_get_drvdata(&pdev->dev);
+	struct gpio_leds_priv *priv = platform_get_drvdata(pdev);
 	int i;
 
 	for (i = 0; i < priv->num_leds; i++)
 		delete_gpio_led(&priv->leds[i]);
 
-	dev_set_drvdata(&pdev->dev, NULL);
-	kfree(priv);
+	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }
@@ -288,7 +286,7 @@ static struct platform_driver gpio_led_driver = {
 	.driver		= {
 		.name	= "leds-gpio",
 		.owner	= THIS_MODULE,
-		.of_match_table = of_gpio_leds_match,
+		.of_match_table = of_match_ptr(of_gpio_leds_match),
 	},
 };
 

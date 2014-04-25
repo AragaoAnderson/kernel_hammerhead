@@ -198,6 +198,7 @@
 		compatible = "qcom,msm-vidc";
 		reg = <0xfdc00000 0xff000>;
 		interrupts = <0 44 0>;
+		vdd-supply = <&gdsc_venus>;
 		qcom,hfi = "venus";
 		qcom,has-ocmem;
 		qcom,max-hw-load = <1224450>; /* 4k @ 30 + 1080p @ 30*/
@@ -460,7 +461,7 @@
 		interrupt-names = "hc_irq", "pwr_irq";
 		qcom,clk-rates = <400000 20000000 25000000 50000000 100000000 200000000>;
 		qcom,bus-speed-mode = "HS200_1p8v", "DDR_1p8v";
-		qcom,cpu-dma-latency-us = <200>;
+		qcom,cpu-dma-latency-us = <100>;
 
 		qcom,msm-bus,name = "sdhc1";
 		qcom,msm-bus,num-cases = <8>;
@@ -648,6 +649,9 @@
 		reg-names = "slimbus_physical", "slimbus_bam_physical";
 		interrupts = <0 163 0 0 164 0>;
 		interrupt-names = "slimbus_irq", "slimbus_bam_irq";
+		qcom,apps-ch-pipes = <0x60000000>;
+		qcom,ea-pc = <0x30>;
+		qcom,slim-mdm = <1>;
 
 		taiko_codec {
 			compatible = "qcom,taiko-slim-pgd";
@@ -865,6 +869,8 @@
 		qcom,dwc-usb3-msm-dbm-eps = <4>;
 		qcom,vdd-voltage-level = <1 5 7>;
 		qcom,dwc-hsphy-init = <0x00D191A4>;
+		qcom,dwc-usb3-msm-tx-fifo-size = <29696>;
+		qcom,dwc-usb3-msm-qdss-tx-fifo-size = <8192>;
 
 		qcom,msm-bus,name = "usb3";
 		qcom,msm-bus,num-cases = <2>;
@@ -878,6 +884,7 @@
 			interrupt-parent = <&intc>;
 			interrupts = <0 131 0>, <0 179 0>;
 			interrupt-names = "irq", "otg_irq";
+			tx-fifo-resize;
 		};
 	};
 
@@ -1274,8 +1281,8 @@
 		qcom,msm-bus,num-cases = <2>;
 		qcom,msm-bus,num-paths = <1>;
 		qcom,msm-bus,vectors-KBps =
-				<1 618 0 0>,
-				<1 618 0 800>;
+				<88 618 0 0>,
+				<88 618 0 800>;
         };
 
 	qseecom: qcom,qseecom@7b00000 {
@@ -1299,8 +1306,8 @@
 		compatible = "qcom,msm-watchdog";
 		reg = <0xf9017000 0x1000>;
 		interrupts = <0 3 0>, <0 4 0>;
-		qcom,bark-time = <11000>;
-		qcom,pet-time = <10000>;
+		qcom,bark-time = <21000>;
+		qcom,pet-time = <20000>;
 		qcom,ipi-ping;
 	};
 
@@ -1466,7 +1473,7 @@
 
 	qcom,msm-thermal {
 		compatible = "qcom,msm-thermal";
-		qcom,sensor-id = <5>;
+		qcom,sensor-id = <0>;
 		qcom,poll-ms = <250>;
 		qcom,limit-temp = <60>;
 		qcom,temp-hysteresis = <10>;
