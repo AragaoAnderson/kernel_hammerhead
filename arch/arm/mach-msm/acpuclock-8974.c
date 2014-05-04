@@ -684,7 +684,7 @@ static struct acpu_level acpu_freq_tbl_2p2g_pvs6[] __initdata = {
 
 static struct acpu_level acpu_freq_tbl_2p3g_pvs0[] __initdata = {
 #ifdef CONFIG_CPU_UNDERCLOCK
-	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  800000,  60 },
+	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  775000,  60 },
 #endif
 	{ 1, {  300000, PLL_0, 0,   0 },  L2(0),  800000,  72 },
 	{ 1, {  345600, HFPLL, 2,  36 },  L2(1),  800000,  83 },
@@ -718,7 +718,7 @@ static struct acpu_level acpu_freq_tbl_2p3g_pvs0[] __initdata = {
 
 static struct acpu_level acpu_freq_tbl_2p3g_pvs1[] __initdata = {
 #ifdef CONFIG_CPU_UNDERCLOCK
-	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  800000,  60 },
+	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  775000,  60 },
 #endif
 	{ 1, {  300000, PLL_0, 0,   0 },  L2(0),  800000,  72 },
 	{ 1, {  345600, HFPLL, 2,  36 },  L2(1),  800000,  83 },
@@ -752,7 +752,7 @@ static struct acpu_level acpu_freq_tbl_2p3g_pvs1[] __initdata = {
 
 static struct acpu_level acpu_freq_tbl_2p3g_pvs2[] __initdata = {
 #ifdef CONFIG_CPU_UNDERCLOCK
-	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  800000,  60 },
+	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  775000,  60 },
 #endif
 	{ 1, {  300000, PLL_0, 0,   0 },  L2(0),  775000,  72 },
 	{ 1, {  345600, HFPLL, 2,  36 },  L2(1),  775000,  83 },
@@ -786,7 +786,7 @@ static struct acpu_level acpu_freq_tbl_2p3g_pvs2[] __initdata = {
 
 static struct acpu_level acpu_freq_tbl_2p3g_pvs3[] __initdata = {
 #ifdef CONFIG_CPU_UNDERCLOCK
-	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  800000,  60 },
+	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  775000,  60 },
 #endif
 	{ 1, {  300000, PLL_0, 0,   0 },  L2(0),  775000,  72 },
 	{ 1, {  345600, HFPLL, 2,  36 },  L2(1),  775000,  83 },
@@ -820,7 +820,7 @@ static struct acpu_level acpu_freq_tbl_2p3g_pvs3[] __initdata = {
 
 static struct acpu_level acpu_freq_tbl_2p3g_pvs4[] __initdata = {
 #ifdef CONFIG_CPU_UNDERCLOCK
-	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  800000,  60 },
+	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  775000,  60 },
 #endif
 	{ 1, {  300000, PLL_0, 0,   0 },  L2(0),  775000,  72 },
 	{ 1, {  345600, HFPLL, 2,  36 },  L2(1),  775000,  83 },
@@ -854,7 +854,7 @@ static struct acpu_level acpu_freq_tbl_2p3g_pvs4[] __initdata = {
 
 static struct acpu_level acpu_freq_tbl_2p3g_pvs5[] __initdata = {
 #ifdef CONFIG_CPU_UNDERCLOCK
-	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  800000,  60 },
+	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  750000,  60 },
 #endif
 	{ 1, {  300000, PLL_0, 0,   0 },  L2(0),  750000,  72 },
 	{ 1, {  345600, HFPLL, 2,  36 },  L2(1),  750000,  83 },
@@ -888,7 +888,7 @@ static struct acpu_level acpu_freq_tbl_2p3g_pvs5[] __initdata = {
 
 static struct acpu_level acpu_freq_tbl_2p3g_pvs6[] __initdata = {
 #ifdef CONFIG_CPU_UNDERCLOCK
-	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  800000,  60 },
+	{ 1, {  249600, HFPLL, 2,  26 },  L2(0),  750000,  60 },
 #endif
 	{ 1, {  300000, PLL_0, 0,   0 },  L2(0),  750000,  72 },
 	{ 1, {  345600, HFPLL, 2,  36 },  L2(1),  750000,  83 },
