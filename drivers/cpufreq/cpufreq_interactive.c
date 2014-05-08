@@ -143,9 +143,9 @@ extern u64 last_input_time;
  * sync_freq
  */
 
-static unsigned int up_threshold_any_cpu_load = 85;
+static unsigned int up_threshold_any_cpu_load = 50;
 static unsigned int sync_freq = CPU_SYNC_FREQ;
-static unsigned int up_threshold_any_cpu_freq = 1036800;
+static unsigned int up_threshold_any_cpu_freq = 1267200;
 
 
 static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
@@ -796,7 +796,7 @@ static ssize_t show_target_loads(
 		ret += sprintf(buf + ret, "%u%s", target_loads[i],
 			       i & 0x1 ? ":" : " ");
 
-	ret += sprintf(buf + --ret, "\n");
+	sprintf(buf + ret - 1, "\n");
 	spin_unlock_irqrestore(&target_loads_lock, flags);
 	return ret;
 }
@@ -839,7 +839,7 @@ static ssize_t show_above_hispeed_delay(
 		ret += sprintf(buf + ret, "%u%s", above_hispeed_delay[i],
 			       i & 0x1 ? ":" : " ");
 
-	ret += sprintf(buf + --ret, "\n");
+	sprintf(buf + ret - 1, "\n");
 	spin_unlock_irqrestore(&above_hispeed_delay_lock, flags);
 	return ret;
 }

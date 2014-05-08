@@ -60,7 +60,8 @@ static void mmc_clk_scaling(struct mmc_host *host, bool from_wq);
 #define MMC_BKOPS_MAX_TIMEOUT	(30 * 1000) /* max time to wait in ms */
 
 /* Flushing a large amount of cached data may take a long time. */
-#define MMC_FLUSH_REQ_TIMEOUT_MS 30000 /* msec */
+#define MMC_FLUSH_REQ_TIMEOUT_MS 90000 /* msec */
+#define MMC_CACHE_DISBALE_TIMEOUT_MS 180000 /* msec */
 
 static struct workqueue_struct *workqueue;
 
@@ -636,7 +637,7 @@ static int mmc_stop_request(struct mmc_host *host)
 	int err = 0;
 	u32 status;
 
-	if (!host->ops->stop_request || !card->ext_csd.hpi) {
+	if (!host->ops->stop_request || !card->ext_csd.hpi_en) {
 		pr_warn("%s: host ops stop_request() or HPI not supported\n",
 				mmc_hostname(host));
 		return -ENOTSUPP;
@@ -773,7 +774,11 @@ static int mmc_wait_for_data_req_done(struct mmc_host *host,
 				 */
 				mmc_update_clk_scaling(host);
 				err = mmc_stop_request(host);
-				if (err && !context_info->is_done_rcv) {
+				if (err == MMC_BLK_NO_REQ_TO_STOP) {
+					pending_is_urgent = true;
+					/* wait for done/new/urgent event */
+					continue;
+				} else if (err && !context_info->is_done_rcv) {
 					err = MMC_BLK_ABORT;
 					break;
 				}
@@ -1007,6 +1012,10 @@ EXPORT_SYMBOL(mmc_start_req);
  */
 void mmc_wait_for_req(struct mmc_host *host, struct mmc_request *mrq)
 {
+#ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
+	if (mmc_bus_needs_resume(host))
+		mmc_resume_bus(host);
+#endif
 	__mmc_start_req(host, mrq);
 	mmc_wait_for_req_done(host, mrq);
 }
@@ -1097,8 +1106,13 @@ int mmc_interrupt_hpi(struct mmc_card *card)
 
 		if (!err && R1_CURRENT_STATE(status) == R1_STATE_TRAN)
 			break;
-		if (time_after(jiffies, prg_wait))
-			err = -ETIMEDOUT;
+		if (time_after(jiffies, prg_wait)) {
+			err = mmc_send_status(card, &status);
+			if (!err && R1_CURRENT_STATE(status) != R1_STATE_TRAN)
+				err = -ETIMEDOUT;
+			else
+				break;
+		}
 	} while (!err);
 
 out:
@@ -1326,6 +1340,11 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	if (card->quirks & MMC_QUIRK_INAND_DATA_TIMEOUT) {
 		data->timeout_ns = 4000000000u; /* 4s */
 		data->timeout_clks = 0;
+	}
+	/* Some emmc cards require a longer read/write time */
+	if (card->quirks & MMC_QUIRK_BROKEN_DATA_TIMEOUT) {
+		if (data->timeout_ns <  4000000000u)
+			data->timeout_ns = 4000000000u;	/* 4s */
 	}
 }
 EXPORT_SYMBOL(mmc_set_data_timeout);
@@ -2012,7 +2031,7 @@ int mmc_resume_bus(struct mmc_host *host)
 	if (!mmc_bus_needs_resume(host))
 		return -EINVAL;
 
-	printk("%s: Starting deferred resume\n", mmc_hostname(host));
+	pr_debug("%s: Starting deferred resume\n", mmc_hostname(host));
 	spin_lock_irqsave(&host->lock, flags);
 	host->bus_resume_flags &= ~MMC_BUSRESUME_NEEDS_RESUME;
 	host->rescan_disable = 0;
@@ -2025,11 +2044,8 @@ int mmc_resume_bus(struct mmc_host *host)
 		host->bus_ops->resume(host);
 	}
 
-	if (host->bus_ops->detect && !host->bus_dead)
-		host->bus_ops->detect(host);
-
 	mmc_bus_put(host);
-	printk("%s: Deferred resume completed\n", mmc_hostname(host));
+	pr_debug("%s: Deferred resume completed\n", mmc_hostname(host));
 	return 0;
 }
 
@@ -2613,7 +2629,7 @@ int mmc_can_reset(struct mmc_card *card)
 	if (mmc_card_sdio(card))
 		return 0;
 
-	if (mmc_card_mmc(card)) {
+	if (mmc_card_mmc(card) && (card->host->caps & MMC_CAP_HW_RESET)) {
 		rst_n_function = card->ext_csd.rst_n_function;
 		if ((rst_n_function & EXT_CSD_RST_N_EN_MASK) !=
 		    EXT_CSD_RST_N_ENABLED)
@@ -2630,9 +2646,6 @@ static int mmc_do_hw_reset(struct mmc_host *host, int check)
 	if (!host->bus_ops->power_restore)
 		return -EOPNOTSUPP;
 
-	if (!(host->caps & MMC_CAP_HW_RESET))
-		return -EOPNOTSUPP;
-
 	if (!card)
 		return -EINVAL;
 
@@ -2642,10 +2655,10 @@ static int mmc_do_hw_reset(struct mmc_host *host, int check)
 	mmc_host_clk_hold(host);
 	mmc_set_clock(host, host->f_init);
 
-	if (mmc_card_sd(card))
-		mmc_power_cycle(host);
-	else if (host->ops->hw_reset)
+	if (mmc_card_mmc(card) && host->ops->hw_reset)
 		host->ops->hw_reset(host);
+	else
+		mmc_power_cycle(host);
 
 	/* If the reset has happened, then a status command will fail */
 	if (check) {
@@ -2716,13 +2729,19 @@ EXPORT_SYMBOL_GPL(mmc_reset_clk_scale_stats);
 unsigned long mmc_get_max_frequency(struct mmc_host *host)
 {
 	unsigned long freq;
+	unsigned char timing;
 
 	if (host->ops && host->ops->get_max_frequency) {
 		freq = host->ops->get_max_frequency(host);
 		goto out;
 	}
 
-	switch (host->ios.timing) {
+	if (mmc_card_hs400(host->card))
+		timing = MMC_TIMING_MMC_HS400;
+	else
+		timing = host->ios.timing;
+
+	switch (timing) {
 	case MMC_TIMING_UHS_SDR50:
 		freq = UHS_SDR50_MAX_DTR;
 		break;
@@ -2734,6 +2753,9 @@ unsigned long mmc_get_max_frequency(struct mmc_host *host)
 		break;
 	case MMC_TIMING_UHS_DDR50:
 		freq = UHS_DDR50_MAX_DTR;
+		break;
+	case MMC_TIMING_MMC_HS400:
+		freq = MMC_HS400_MAX_DTR;
 		break;
 	default:
 		mmc_host_clk_hold(host);
@@ -2773,6 +2795,9 @@ static unsigned long mmc_get_min_frequency(struct mmc_host *host)
 		freq = UHS_SDR25_MAX_DTR;
 		break;
 	case MMC_TIMING_MMC_HS200:
+		freq = MMC_HIGH_52_MAX_DTR;
+		break;
+	case MMC_TIMING_MMC_HS400:
 		freq = MMC_HIGH_52_MAX_DTR;
 		break;
 	case MMC_TIMING_UHS_DDR50:
@@ -3153,6 +3178,7 @@ void mmc_rescan(struct work_struct *work)
 		return;
 
 	mmc_bus_get(host);
+	mmc_rpm_hold(host, &host->class_dev);
 
 	/*
 	 * if there is a _removable_ card registered, check whether it is
@@ -3185,9 +3211,12 @@ void mmc_rescan(struct work_struct *work)
 
 	/* if there still is a card present, stop here */
 	if (host->bus_ops != NULL) {
+		mmc_rpm_release(host, &host->class_dev);
 		mmc_bus_put(host);
 		goto out;
 	}
+
+	mmc_rpm_release(host, &host->class_dev);
 
 	/*
 	 * Only we can add a new handler, so it's safe to
@@ -3358,7 +3387,8 @@ int mmc_flush_cache(struct mmc_card *card)
 	struct mmc_host *host = card->host;
 	int err = 0, rc;
 
-	if (!(host->caps2 & MMC_CAP2_CACHE_CTRL))
+	if (!(host->caps2 & MMC_CAP2_CACHE_CTRL) ||
+	     (card->quirks & MMC_QUIRK_CACHE_DISABLE))
 		return err;
 
 	if (mmc_card_mmc(card) &&
@@ -3368,7 +3398,7 @@ int mmc_flush_cache(struct mmc_card *card)
 						EXT_CSD_FLUSH_CACHE, 1,
 						MMC_FLUSH_REQ_TIMEOUT_MS);
 		if (err == -ETIMEDOUT) {
-			pr_debug("%s: cache flush timeout\n",
+			pr_err("%s: cache flush timeout\n",
 					mmc_hostname(card->host));
 			rc = mmc_interrupt_hpi(card);
 			if (rc)
@@ -3397,7 +3427,8 @@ int mmc_cache_ctrl(struct mmc_host *host, u8 enable)
 	int err = 0, rc;
 
 	if (!(host->caps2 & MMC_CAP2_CACHE_CTRL) ||
-			mmc_card_is_removable(host))
+			mmc_card_is_removable(host) ||
+			(card->quirks & MMC_QUIRK_CACHE_DISABLE))
 		return err;
 
 	if (card && mmc_card_mmc(card) &&
@@ -3406,14 +3437,14 @@ int mmc_cache_ctrl(struct mmc_host *host, u8 enable)
 
 		if (card->ext_csd.cache_ctrl ^ enable) {
 			if (!enable)
-				timeout = MMC_FLUSH_REQ_TIMEOUT_MS;
+				timeout = MMC_CACHE_DISBALE_TIMEOUT_MS;
 
 			err = mmc_switch_ignore_timeout(card,
 					EXT_CSD_CMD_SET_NORMAL,
 					EXT_CSD_CACHE_CTRL, enable, timeout);
 
 			if (err == -ETIMEDOUT && !enable) {
-				pr_debug("%s:cache disable operation timeout\n",
+				pr_err("%s:cache disable operation timeout\n",
 						mmc_hostname(card->host));
 				rc = mmc_interrupt_hpi(card);
 				if (rc)
