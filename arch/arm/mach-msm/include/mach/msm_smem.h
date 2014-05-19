@@ -26,6 +26,18 @@ enum {
 	NUM_SMEM_SUBSYSTEMS,
 };
 
+/*
+ * Flag options for the XXX_to_proc() API
+ *
+ * SMEM_ITEM_CACHED_FLAG - Indicates this operation should use cachable smem
+ *
+ * SMEM_ANY_HOST_FLAG - Indicates this operation should not apply to smem items
+ *                      which are limited to a specific host pairing.  Will
+ *                      cause this operation to ignore the to_proc parameter.
+ */
+#define SMEM_ITEM_CACHED_FLAG 1
+#define SMEM_ANY_HOST_FLAG 2
+
 #define SMEM_NUM_SMD_STREAM_CHANNELS        64
 #define SMEM_NUM_SMD_BLOCK_CHANNELS         64
 
@@ -156,6 +168,15 @@ void *smem_alloc2(unsigned id, unsigned size_in);
 void *smem_get_entry(unsigned id, unsigned *size);
 void *smem_find(unsigned id, unsigned size);
 
+void *smem_alloc2_to_proc(unsigned id, unsigned size_in, unsigned to_proc,
+								unsigned flags);
+void *smem_alloc_to_proc(unsigned id, unsigned size, unsigned to_proc,
+								unsigned flags);
+void *smem_find_to_proc(unsigned id, unsigned size_in, unsigned to_proc,
+								unsigned flags);
+void *smem_get_entry_to_proc(unsigned id, unsigned *size, unsigned to_proc,
+								unsigned flags);
+
 /**
  * smem_get_entry_no_rlock - Get existing item without using remote spinlock
  *
@@ -180,6 +201,13 @@ void *smem_get_entry_no_rlock(unsigned id, unsigned *size_out);
  */
 phys_addr_t smem_virt_to_phys(void *smem_address);
 
+/**
+ * SMEM initialization function that registers for a SMEM platform driver.
+ *
+ * @returns: success on successful driver registration.
+ */
+int __init msm_smem_init(void);
+
 #else
 static inline void *smem_alloc(unsigned id, unsigned size)
 {
@@ -197,6 +225,26 @@ static inline void *smem_find(unsigned id, unsigned size)
 {
 	return NULL;
 }
+void *smem_alloc2_to_proc(unsigned id, unsigned size_in, unsigned to_proc,
+								unsigned flags)
+{
+	return NULL;
+}
+static void *smem_alloc_to_proc(unsigned id, unsigned size, unsigned to_proc,
+								unsigned flags)
+{
+	return NULL;
+}
+static void *smem_find_to_proc(unsigned id, unsigned size_in, unsigned to_proc,
+								unsigned flags)
+{
+	return NULL;
+}
+static void *smem_get_entry_to_proc(unsigned id, unsigned *size,
+					unsigned to_proc, unsigned flags)
+{
+	return NULL;
+}
 void *smem_get_entry_no_rlock(unsigned id, unsigned *size_out)
 {
 	return NULL;
@@ -204,6 +252,10 @@ void *smem_get_entry_no_rlock(unsigned id, unsigned *size_out)
 static inline phys_addr_t smem_virt_to_phys(void *smem_address)
 {
 	return (phys_addr_t) NULL;
+}
+static int __init msm_smem_init(void)
+{
+	return 0;
 }
 #endif /* CONFIG_MSM_SMD  */
 #endif /* _ARCH_ARM_MACH_MSM_SMEM_H_ */

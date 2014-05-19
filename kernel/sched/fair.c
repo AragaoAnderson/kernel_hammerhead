@@ -4883,7 +4883,7 @@ static void nohz_balancer_kick(int cpu)
 	return;
 }
 
-static inline void clear_nohz_tick_stopped(int cpu)
+static inline void nohz_balance_exit_idle(int cpu)
 {
 	if (unlikely(test_bit(NOHZ_TICK_STOPPED, nohz_flags(cpu)))) {
 		cpumask_clear_cpu(cpu, nohz.idle_cpus_mask);
@@ -4897,13 +4897,16 @@ static inline void set_cpu_sd_state_busy(void)
 	struct sched_domain *sd;
 	int cpu = smp_processor_id();
 
-	if (!test_bit(NOHZ_IDLE, nohz_flags(cpu)))
-		return;
-	clear_bit(NOHZ_IDLE, nohz_flags(cpu));
-
 	rcu_read_lock();
-	for_each_domain(cpu, sd)
+	sd = rcu_dereference_check_sched_domain(cpu_rq(cpu)->sd);
+
+	if (!sd || !sd->nohz_idle)
+		goto unlock;
+	sd->nohz_idle = 0;
+
+	for (; sd; sd = sd->parent)
 		atomic_inc(&sd->groups->sgp->nr_busy_cpus);
+unlock:
 	rcu_read_unlock();
 }
 
@@ -4912,39 +4915,37 @@ void set_cpu_sd_state_idle(void)
 	struct sched_domain *sd;
 	int cpu = smp_processor_id();
 
-	if (test_bit(NOHZ_IDLE, nohz_flags(cpu)))
-		return;
-	set_bit(NOHZ_IDLE, nohz_flags(cpu));
-
 	rcu_read_lock();
-	for_each_domain(cpu, sd)
+	sd = rcu_dereference_check_sched_domain(cpu_rq(cpu)->sd);
+
+	if (!sd || sd->nohz_idle)
+		goto unlock;
+	sd->nohz_idle = 1;
+
+	for (; sd; sd = sd->parent)
 		atomic_dec(&sd->groups->sgp->nr_busy_cpus);
+unlock:
 	rcu_read_unlock();
 }
 
 /*
- * This routine will record that this cpu is going idle with tick stopped.
+ * This routine will record that the cpu is going idle with tick stopped.
  * This info will be used in performing idle load balancing in the future.
  */
-void select_nohz_load_balancer(int stop_tick)
+void nohz_balance_enter_idle(int cpu)
 {
-	int cpu = smp_processor_id();
-
 	/*
 	 * If this cpu is going down, then nothing needs to be done.
 	 */
 	if (!cpu_active(cpu))
 		return;
 
-	if (stop_tick) {
-		if (test_bit(NOHZ_TICK_STOPPED, nohz_flags(cpu)))
-			return;
+	if (test_bit(NOHZ_TICK_STOPPED, nohz_flags(cpu)))
+		return;
 
-		cpumask_set_cpu(cpu, nohz.idle_cpus_mask);
-		atomic_inc(&nohz.nr_cpus);
-		set_bit(NOHZ_TICK_STOPPED, nohz_flags(cpu));
-	}
-	return;
+	cpumask_set_cpu(cpu, nohz.idle_cpus_mask);
+	atomic_inc(&nohz.nr_cpus);
+	set_bit(NOHZ_TICK_STOPPED, nohz_flags(cpu));
 }
 
 static int __cpuinit sched_ilb_notifier(struct notifier_block *nfb,
@@ -4952,7 +4953,7 @@ static int __cpuinit sched_ilb_notifier(struct notifier_block *nfb,
 {
 	switch (action & ~CPU_TASKS_FROZEN) {
 	case CPU_DYING:
-		clear_nohz_tick_stopped(smp_processor_id());
+		nohz_balance_exit_idle(smp_processor_id());
 		return NOTIFY_OK;
 	default:
 		return NOTIFY_DONE;
@@ -5112,7 +5113,7 @@ static inline int nohz_kick_needed(struct rq *rq, int cpu)
 	* busy tick after returning from idle, we will update the busy stats.
 	*/
 	set_cpu_sd_state_busy();
-	clear_nohz_tick_stopped(cpu);
+	nohz_balance_exit_idle(cpu);
 
 	/*
 	 * None are in tickless mode and hence no need for NOHZ idle load
@@ -5136,7 +5137,7 @@ static inline int nohz_kick_needed(struct rq *rq, int cpu)
 		if (sd->flags & SD_SHARE_PKG_RESOURCES && nr_busy > 1)
 			goto need_kick_unlock;
 
-		if (sd->flags & SD_ASYM_PACKING && nr_busy != sg->group_weight
+		if (sd->flags & SD_ASYM_PACKING
 		    && (cpumask_first_and(nohz.idle_cpus_mask,
 					  sched_domain_span(sd)) < cpu))
 			goto need_kick_unlock;
