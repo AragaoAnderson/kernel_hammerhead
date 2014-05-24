@@ -214,7 +214,8 @@ unsigned long oom_badness(struct task_struct *p, struct mem_cgroup *memcg,
 	if (!p)
 		return 0;
 
-	if ((long)p->signal->oom_score_adj == OOM_SCORE_ADJ_MIN) {
+	adj = (long)p->signal->oom_score_adj;
+	if (adj == OOM_SCORE_ADJ_MIN) {
 		task_unlock(p);
 		return 0;
 	}
@@ -399,8 +400,8 @@ static struct task_struct *select_bad_process(unsigned int *ppoints,
  * Dumps the current memory state of all eligible tasks.  Tasks not in the same
  * memcg, not in the same cpuset, or bound to a disjoint set of mempolicy nodes
  * are not shown.
- * State information includes task's pid, uid, tgid, vm size, rss, nr_ptes,
- * swapents, oom_score_adj value, and name.
+ * State information includes task's pid, uid, tgid, vm size, rss, cpu, oom_adj
+ * value, oom_score_adj value, and name.
  */
 static void dump_tasks(const struct mem_cgroup *memcg, const nodemask_t *nodemask)
 {
